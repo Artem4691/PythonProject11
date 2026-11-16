@@ -1,0 +1,81 @@
+from aiogram import F, Router
+from aiogram.filters import Command
+from aiogram.types import Message, FSInputFile, CallbackQuery
+
+from config import bot
+from database import db
+from handlers.buttons import main_buttons, menu_buttons, product_actions
+
+router_commands = Router()
+
+
+@router_commands.message(Command('start'))
+async def start_handler(message: Message):
+    await message.answer('Привет мир!', reply_markup=menu_buttons)
+
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text=f'Привет! {message.from_user.full_name} \nТвой телеграм ID > {message.from_user.id}'
+    )
+
+
+@router_commands.message(F.text == 'привет')
+async def hello_handler(message: Message):
+    await message.answer('Салам')
+
+
+@router_commands.message(Command('sticker'))
+async def sticker_handler(message: Message):
+    await message.answer_sticker(sticker='CAACAgIAAxkBAAM5auCySPyaBYsHzBJnxxDp79pfm1sAAqirAAKFa_lIF38CcJWB3Wg9BA')
+    await message.answer_sticker(sticker='CAACAgIAAxkBAAM1auCx0ITQ8BljCxCaBsYQuKdB2vEAAiwMAA1eEbA_LD3f9g8IMvD0E')
+
+
+@router_commands.message(Command('mem'))
+async def mem_handler(message: Message):
+    photo = FSInputFile('media/img.png')
+    await message.answer_photo(photo=photo)
+
+
+@router_commands.callback_query(F.data == 'mem')
+async def mem_handler_inline_test(call: CallbackQuery):
+    photo = FSInputFile('media/img.png')
+    await call.message.answer_photo(photo=photo)
+
+
+@router_commands.message(Command('products'))
+async def get_products(message: Message):
+    staff = await db.get_staff_list_db()
+    staff_ids = [user_id for user_id, full_name in staff]
+    products = await db.get_products_db()
+
+    for name_product, price, photo, description, category, product_id in products:
+        caption_text = (
+            f'Название - {name_product}\n'
+            f'Цена - {price}\n'
+            f'Описание - {description}\n'
+            f'Категория - {category}\n'
+            f'Артикул - {product_id}'
+        )
+        if message.from_user.id in staff_ids:
+            await message.answer_photo(
+                photo=photo,
+                caption=caption_text,
+                reply_markup=product_actions(product_id)
+            )
+        else:
+            await message.answer_photo(
+                photo=photo,
+                caption=caption_text
+            )
+
+
+@router_commands.message(Command('staff'))
+async def staff_list(message: Message):
+    staff = await db.get_staff_list_db()
+    staff_ids = [user_id for user_id, full_name in staff]
+
+    if message.from_user.id in staff_ids:
+        for user_id, full_name in staff:
+            await message.answer(f'ФИО - {full_name} \nID - {user_id}')
+    else:
+        await message.answer('У вас нет доступов к этой команде!')
